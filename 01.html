@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>次方 / 開根號計算機</title>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      margin-top: 50px;
+    }
+    input, select, button {
+      margin: 10px;
+      padding: 8px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>計算機</h2>
+
+  <input type="number" id="x" placeholder="輸入 x">
+  
+  <select id="opt">
+    <option value="power">∧ 次方</option>
+    <option value="root">✓ 開根號</option>
+  </select>
+
+  <input type="number" id="y" placeholder="輸入 y">
+
+  <br>
+  <button onclick="calculate()">計算</button>
+
+  <h3 id="result">結果：</h3>
+
+  <script>
+    function calculate() {
+      let x = parseFloat(document.getElementById("x").value);
+      let y = parseFloat(document.getElementById("y").value);
+      let opt = document.getElementById("opt").value;
+      let result;
+
+      if (isNaN(x) || isNaN(y)) {
+        result = "請輸入數字！";
+      } else if (opt === "power") {
+        result = x ** y;
+      } else if (opt === "root") {
+        if (y === 0) {
+          result = "錯誤：不能開 0 次方根";
+        } else {
+          result = x ** (1 / y);
+        }
+      }
+
+      document.getElementById("result").innerText = "結果：" + result;
+    }
+  </script>
+
+</body>
+</html>
