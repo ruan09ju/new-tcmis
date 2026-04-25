@@ -34,7 +34,71 @@ def index():
     link += "<a href=/read>讀取Firestore資料</a><hr>"
     link += "<a href=/read2>讀取Firestore資料(根據名字關鍵字:楊)</a><hr>"
     link += "<a href=/sprider>爬取子青老師本學期課程</a><hr>"
+    link += "<a href=/movie1>爬取即將上映電影</a><hr>"
     return link
+
+@app.route("/movie1")
+def movie1():
+    # 取得關鍵字
+    keyword = request.args.get("keyword", "").strip()
+    
+    # 1. 基礎畫面：一進去只會看到這個搜尋表單
+    R = f"""
+    <h2>即將上映電影查詢</h2>
+    <form action="/movie1" method="get">
+        <label>請輸入電影關鍵字：</label>
+        <input type="text" name="keyword" value="{keyword}" placeholder="例如: 蜘蛛人">
+        <button type="submit">搜尋</button>
+    </form>
+    <hr>
+    """
+    
+    # 2. 邏輯閘門：只有當 keyword 有內容時（使用者按下搜尋後），才執行以下爬蟲
+    if keyword:
+        R += f"<p>您搜尋的關鍵字是：<b style='color: blue;'>{keyword}</b></p>"
+        
+        url = "https://www.atmovies.com.tw/movie/next/"
+        
+        try:
+            Data = requests.get(url, timeout=5) 
+            Data.encoding = "utf-8"
+            sp = BeautifulSoup(Data.text, "html.parser")
+            result = sp.select(".filmListAllX li")
+            
+            found_count = 0 
+            
+            for item in result:
+                try:
+                    img_tag = item.find("img")
+                    a_tag = item.find("a")
+                    
+                    if img_tag and a_tag:
+                        title = img_tag.get("alt")
+                        
+                        # 3. 這裡只需要比對關鍵字有沒有在標題裡，不用再管沒有關鍵字的狀況了
+                        if keyword in title:
+                            found_count += 1
+                            introduce = "https://www.atmovies.com.tw" + a_tag.get("href")
+                            img_url = "https://www.atmovies.com.tw" + img_tag.get("src")
+                            
+                            R += f"<div style='margin-bottom: 20px;'>"
+                            R += f"  <h3 style='margin: 5px 0;'>{title}</h3>"
+                            R += f"  <a href='{introduce}' target='_blank'>電影介紹頁面 ➔</a><br><br>"
+                            # 確保圖片能正常顯示，並加上一點排版
+                            R += f"  <img src='{img_url}' width='200' style='border-radius: 8px; box-shadow: 3px 3px 8px rgba(0,0,0,0.3);'>"
+                            R += f"</div><hr>"
+                except Exception:
+                    continue 
+                    
+            if found_count == 0:
+                R += f"<p style='color: red;'>抱歉，找不到包含「{keyword}」的電影。</p>"
+                
+        except requests.exceptions.RequestException:
+            R += "<p style='color: red;'>無法連線到電影網站，請稍後再試。</p>"
+            
+    # 如果沒有 keyword，就會直接跳到這裡，回傳乾淨的表單
+    return R
+
 
 @app.route("/sprider")
 def spider():
