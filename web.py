@@ -37,17 +37,93 @@ def index():
     link += "<a href=/spriderm>爬取即將上映電影到資料庫</a><hr>"
     link += "<a href=/searchMovie>搜尋電影資料庫</a><hr>"
     link += "<a href=/road>台中市十大肇事路口</a><hr>"
+    link += "<a href=/weather>全縣市天氣概況</a><hr>"
     return link
 
+
+@app.route("/weather")
+def weather():
+    # 1. 網頁要改用 request.args 取得參數，預設值設為「臺中市」
+    city = request.args.get("city", "臺中市")
+    city = city.replace("台", "臺")
+
+    # 氣象局 API
+    url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-C0032-001?Authorization=rdec-key-123-45678-011121314&format=JSON&locationName=" + city
+    
+    try:
+        Data = requests.get(url)
+        jsonData = json.loads(Data.text)
+        
+        # 取得縣市名稱
+        location_name = jsonData["records"]["location"][0]["locationName"]
+        
+        # 取得天氣現象 (Weather) 與 降雨機率 (Rain)
+        # 這裡建議先存成變數，避免重複 loads 浪費資源
+        weather_elements = jsonData["records"]["location"][0]["weatherElement"]
+        weather_desc = weather_elements[0]["time"][0]["parameter"]["parameterName"]
+        rain_chance = weather_elements[1]["time"][0]["parameter"]["parameterName"]
+
+        # 2. 組合要呈現在網頁上的 HTML 字串
+        R = f"<h2>{location_name} 天氣預報</h2>"
+        R += f"<p>{weather_desc}，降雨機率：{rain_chance}%</p>"
+        
+        # 3. 額外加一個簡易輸入框，讓使用者可以直接在網頁切換縣市
+        R += """
+            <form action="/weather" method="get">
+                <input type="text" name="city" placeholder="輸入縣市，例如：台北市">
+                <button type="submit">查詢</button>
+            </form>
+        """
+        
+    except Exception as e:
+        R = f"查詢失敗，請檢查縣市名稱是否正確。錯誤訊息：{e}"
+
+    return R
+
 @app.route("/road")
-def road():
-    R = "<h1>台中市十大肇事路口(113年10月)</h1><br>"
-    url = "https://datacenter.taichung.gov.tw/swagger/OpenData/a1b899c0-511f-4e3d-b22b-814982a97e41"
-    Data = requests.get(url)
-    #print(Data.text)
-    JsonData = json.loads(Data.text)
-    for item in JsonData:
-        R += item["路口名稱"] + ",原因:", + item["主要肇因"] + "<br>"
+def opendata():
+    R = "<h1>台中市十大肇事路口(113年10月)鐘元汝</h1><br>"
+    # 使用你指定的新網址
+    url = "https://newdatacenter.taichung.gov.tw/api/v1/no-auth/resource.download?rid=a1b899c0-511f-4e3d-b22b-814982a97e41"
+    
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        Data = requests.get(url, headers=headers, timeout=10)
+        Data.encoding = "utf-8"
+        JsonData = Data.json()
+        
+        count = 0
+        total_accidents = 0
+        
+        for item in JsonData:
+            count += 1
+            
+            # --- 強化版抓取邏輯 ---
+            # 1. 抓取路口與原因 (增加備用欄位)
+            location = item.get("路口名稱") or item.get("路口") or "未知路口"
+            reason = item.get("主要肇因") or item.get("肇事原因") or "未知原因"
+            
+            # 2. 自動尋找包含「件數」字眼的欄位 (解決欄位名稱變動問題)
+            num = 0
+            for key, value in item.items():
+                if "件數" in key:
+                    try:
+                        num = int(value)
+                        break # 抓到就跳出
+                    except:
+                        continue
+            
+            total_accidents += num
+            
+            # 依照圖片格式輸出
+            R += f'{count}. {location}，原因：{reason} ({num}件)<br>'
+        
+        # 最後加上總計
+        R += f"<br>113年10月總計件數：{total_accidents}件"
+        
+    except Exception as e:
+        R += f"<p style='color:red;'>錯誤：{e}</p>"
+        
     return R
 
 # --- (作業重點) 搜尋電影資料庫 ---
