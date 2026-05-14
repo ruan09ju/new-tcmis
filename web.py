@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, make_response, jsonify
 from datetime import datetime
 import os
 import json
@@ -40,6 +40,18 @@ def index():
     link += "<a href=/weather>全縣市天氣概況</a><hr>"
     link += "<a href=/rate>本週新片進DB</a><hr>"
     return link
+
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    # build a request object
+    req = request.get_json(force=True)
+    # fetch queryResult from json
+    action =  req.get("queryResult").get("action")
+    msg =  req.get("queryResult").get("queryText")
+    info = "動作：" + action + "； 查詢內容：" + msg
+    return make_response(jsonify({"fulfillmentText": info}))
+
 
 
 @app.route("/rate")
