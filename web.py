@@ -44,17 +44,41 @@ def index():
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    # build a request object
+    # 建立請求物件
     req = request.get_json(force=True)
-    # fetch queryResult from json
-    action =  req["queryResult"]["action"]
-    #msg =  req["queryResult"]["queryText"]
-    #info = "我是鐘元汝設計的機器人,動作：" + action + "； 查詢內容：" + msg
+    
+    # 取得 action 與 rate 參數
+    action = req.get("queryResult").get("action")
+    
     if (action == "rateChoice"):
-        rate =  req["queryResult"]["parameters"]["rate"]
-        info = "我是鐘元汝設計的機器人,您選擇的電影分級是：" + rate
-    return make_response(jsonify({"fulfillmentText": info}))
+        # 取得使用者輸入的分級 (例如：限制級、保護級)
+        rate = req.get("queryResult").get("parameters").get("rate")
+        
+        # 初始化回傳訊息
+        info = "我是鐘元汝設計的機器人，您選擇的電影分級是：" + rate + "，相關電影如下：\n\n"
+        
+        # --- 開始查詢 Firebase ---
+        db = firestore.client()
+        # 注意：這裡要填入你 Firebase 上的集合名稱
+        collection_ref = db.collection("本週新片含分級") 
+        docs = collection_ref.get()
+        
+        result = ""
+        for doc in docs:
+            movie_dict = doc.to_dict()
+            # 檢查分級是否符合
+            if rate in movie_dict.get("rate", ""):
+                result += "🎬 片名：" + movie_dict.get("title") + "\n"
+                result += "🔗 介紹：" + movie_dict.get("hyperlink") + "\n\n"
+        
+        # 如果沒有找到符合的電影
+        if result == "":
+            result = "抱歉，本週沒有這個分級的電影上映。"
+            
+        info += result
+        # --- 結束查詢 ---
 
+        return make_response(jsonify({"fulfillmentText": info}))
 
 
 @app.route("/rate")
