@@ -7,6 +7,7 @@ from firebase_admin import credentials, firestore
 import requests
 from bs4 import BeautifulSoup
 from google import genai
+from google.genai import types
 
 
 # --- Firebase 初始化 ---
