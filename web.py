@@ -125,7 +125,7 @@ def webhook():
 
     elif (action == "input.unknown"):
         # 處理未知意圖
-        info = "抱歉，我聽不懂您的意思，您可以試著問我關於電影分級的問題。"
+                info =  req["queryResult"]["queryText"]
     
     else:
         # 若有其他未定義的 action，給一個預設回應
