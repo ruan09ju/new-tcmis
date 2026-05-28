@@ -91,19 +91,20 @@ def webhook():
     # 建立請求物件
     req = request.get_json(force=True)
     
-    # 取得 action 與 rate 參數
+    # 取得 action 參數
     action = req.get("queryResult").get("action")
     
+    # 初始化 info 變數
+    info = ""
+    
     if (action == "rateChoice"):
-        # 取得使用者輸入的分級 (例如：限制級、保護級)
+        # 取得使用者輸入的分級
         rate = req.get("queryResult").get("parameters").get("rate")
         
-        # 初始化回傳訊息
         info = "我是鐘元汝設計的機器人，您選擇的電影分級是：" + rate + "，相關電影如下：\n\n"
         
         # --- 開始查詢 Firebase ---
         db = firestore.client()
-        # 注意：這裡要填入你 Firebase 上的集合名稱
         collection_ref = db.collection("本週新片含分級") 
         docs = collection_ref.get()
         
@@ -122,7 +123,16 @@ def webhook():
         info += result
         # --- 結束查詢 ---
 
-        return make_response(jsonify({"fulfillmentText": info}))
+    elif (action == "input.unknown"):
+        # 處理未知意圖
+        info = "抱歉，我聽不懂您的意思，您可以試著問我關於電影分級的問題。"
+    
+    else:
+        # 若有其他未定義的 action，給一個預設回應
+        info = "你好，請詢問我關於電影分級的問題。"
+
+    # 統一在這裡回傳結果
+    return make_response(jsonify({"fulfillmentText": info}))
 
 
 @app.route("/rate")
