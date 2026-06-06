@@ -140,9 +140,6 @@ def webhook2():
 
     return make_response(jsonify({"fulfillmentText": info}))
 
-if __name__ == "__main__":
-    app.run(debug=True)
-
 
 @app.route('/ask', methods=['GET', 'POST']) 
 de user_prompt:
