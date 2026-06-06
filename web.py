@@ -49,22 +49,6 @@ def index():
     return link
 
 
-from flask import Flask, request, make_response, jsonify
-import firebase_admin
-from firebase_admin import credentials, firestore
-import requests
-from bs4 import BeautifulSoup
-import os
-import json
-
-# --- 1. 初始化 Firebase (確保只執行一次) ---
-if not firebase_admin._apps:
-    firebase_config = os.getenv('FIREBASE_CONFIG')
-    if firebase_config:
-        cred = credentials.Certificate(json.loads(firebase_config))
-        firebase_admin.initialize_app(cred)
-
-app = Flask(__name__)
 
 # --- 2. 爬蟲函式 (負責寫入資料庫) ---
 def run_spider():
