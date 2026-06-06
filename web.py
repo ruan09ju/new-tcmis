@@ -49,15 +49,13 @@ def index():
     return link
 
 
-
-@app.route("/run_spider")
 def run_spider():
     db = firestore.client()
     url = "https://www.xjjxs.com/"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         res = requests.get(url, headers=headers, verify=False, timeout=10)
-        res.encoding = 'gbk' # 若爬下來文字亂碼，可改為 'utf-8'
+        res.encoding = 'gbk'  # 若爬下來文字亂碼，可改為 'utf-8'
         soup = BeautifulSoup(res.text, "html.parser")
         items = soup.find_all("div", class_="item")
         
@@ -142,7 +140,6 @@ def webhook2():
 
     return make_response(jsonify({"fulfillmentText": info}))
 
-# 這裡修正了縮排：必須與 @app.route 同一級，而不是在 webhook2 函式內
 if __name__ == "__main__":
     app.run(debug=True)
 
