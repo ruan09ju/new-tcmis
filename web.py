@@ -49,14 +49,12 @@ def index():
     return link
 
 
-
-
 @app.route('/ask', methods=['GET', 'POST']) 
-de user_prompt:
-            retuf ask():
+def ask():
     if request.method == "POST":
         user_prompt = request.form.get('prompt', '')
-        if notrn "請輸入內容", 400
+        if not user_prompt:
+            return "請輸入內容", 400
         try:
             response = client.models.generate_content(
                 model='gemini-3.5-flash',
