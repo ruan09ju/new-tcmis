@@ -49,6 +49,77 @@ def index():
     return link
 
 
+
+
+def run_spider():
+    db = firestore.client()
+    url = "https://www.xjjxs.com/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        res = requests.get(url, headers=headers, verify=False, timeout=10)
+        res.encoding = 'gbk'
+        soup = BeautifulSoup(res.text, "html.parser")
+        items = soup.find_all("div", class_="item")
+        
+        count = 0
+        for item in items:
+            a_tag = item.find("a", href=True)
+            if a_tag:
+                title = a_tag.get("title", "無標題")
+                link = a_tag.get("href")
+                # 寫入資料庫
+                db.collection("小說含分類").document(title).set({
+                    "title": title,
+                    "hyperlink": link,
+                    "genre": "爬蟲更新"
+                })
+                count += 1
+        return f"爬蟲執行完畢，共更新 {count} 筆資料"
+    except Exception as e:
+        return f"爬蟲發生錯誤: {e}"
+
+# --- 4. Webhook 主程式 ---
+@app.route("/webhook2", methods=["POST"])
+def webhook2():
+    req = request.get_json(force=True)
+    action = req.get("queryResult", {}).get("action", "")
+    info = "抱歉，小說系統無法辨識您的指令。"
+
+    # 動作 1: 分類查詢
+    if action == "genreChoice":
+        genre = req["queryResult"]["parameters"].get("genre", "")
+        db = firestore.client()
+        docs = db.collection("小說含分類").get()
+        result = f"您選擇的小說分類是：{genre}\n\n"
+        for doc in docs:
+            d = doc.to_dict()
+            if genre in d.get("genre", ""):
+                result += f"📖 書名：{d['title']}\n🔗 連結：{d['hyperlink']}\n\n"
+        info = result if result else "目前資料庫中沒有符合的資料。"
+
+    # 動作 2: 觸發爬蟲
+    elif action == "StartSpider":
+        info = run_spider()
+
+    # 動作 3: Gemini AI 聊天
+    elif action == "input.unknown":
+        ai_config = types.GenerateContentConfig(system_instruction="你是一個熱心的小說專業助理。")
+        try:
+            response = client.models.generate_content(
+                model='gemini-3.5-flash', # 已修正模型名稱建議
+                contents=req["queryResult"]["queryText"],
+                config=ai_config,
+            )
+            info = response.text.replace("\n", " ")
+        except Exception as e:
+            info = f"AI 服務發生錯誤: {e}"
+
+    return make_response(jsonify({"fulfillmentText": info}))
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
 @app.route('/ask', methods=['GET', 'POST']) 
 def ask():
     if request.method == "POST":
