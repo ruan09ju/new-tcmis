@@ -57,7 +57,7 @@ def run_spider():
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         res = requests.get(url, headers=headers, verify=False, timeout=10)
-        res.encoding = 'gbk'
+        res.encoding = 'gbk' # 若爬下來文字亂碼，可改為 'utf-8'
         soup = BeautifulSoup(res.text, "html.parser")
         items = soup.find_all("div", class_="item")
         
@@ -67,16 +67,51 @@ def run_spider():
             if a_tag:
                 title = a_tag.get("title", "無標題")
                 link = a_tag.get("href")
-                # 寫入資料庫
+                # 寫入 Firebase 資料庫
                 db.collection("小說含分類").document(title).set({
                     "title": title,
                     "hyperlink": link,
                     "genre": "爬蟲更新"
                 })
                 count += 1
-        return f"爬蟲執行完畢，共更新 {count} 筆資料"
+        return f"小說爬蟲執行完畢，共更新 {count} 筆資料"
     except Exception as e:
-        return f"爬蟲發生錯誤: {e}"
+        return f"小說爬蟲發生錯誤: {e}"
+
+# --- 3. 電影爬蟲功能 (獨立 Route: /spriderm) ---
+@app.route("/spriderm2")
+def spiderm2():
+    db = firestore.client()
+    url = "http://www.atmovies.com.tw/movie/next/"
+    Data = requests.get(url)
+    Data.encoding = "utf-8"
+    sp = BeautifulSoup(Data.text, "html.parser")
+    
+    lastUpdate_tag = sp.find(class_="smaller09")
+    lastUpdate = lastUpdate_tag.text.replace("更新時間：","") if lastUpdate_tag else "未知"
+    
+    result = sp.select(".filmListAllX li")
+    total = 0
+    for item in result:
+        try:
+            total += 1
+            movie_id = item.find("a").get("href").replace("/movie", "").replace("/", "")
+            title = item.find(class_="filmtitle").text
+            picture = "https://www.atmovies.com.tw" + item.find("img").get("src")
+            hyperlink = "https://www.atmovies.com.tw" + item.find("a").get("href")
+            showDate = item.find(class_="runtime").text[5:15]
+
+            doc = {
+                "title": title,
+                "picture": picture,
+                "hyperlink": hyperlink,
+                "showDate": showDate,
+                "lastUpdate": lastUpdate
+            }
+            db.collection("小說2B").document(movie_id).set(doc)
+        except:
+            continue
+    return f"小說爬蟲完畢，最近更新日期:{lastUpdate}<br>總共爬取 {total} 部小說到資料庫"
 
 # --- 4. Webhook 主程式 ---
 @app.route("/webhook2", methods=["POST"])
@@ -85,47 +120,37 @@ def webhook2():
     action = req.get("queryResult", {}).get("action", "")
     info = "抱歉，小說系統無法辨識您的指令。"
 
-    # 動作 1: 分類查詢
+    # 動作 1: 小說分類查詢
     if action == "genreChoice":
         genre = req["queryResult"]["parameters"].get("genre", "")
         db = firestore.client()
         docs = db.collection("小說含分類").get()
         result = f"您選擇的小說分類是：{genre}\n\n"
+        
+        count = 0
         for doc in docs:
             d = doc.to_dict()
             if genre in d.get("genre", ""):
                 result += f"📖 書名：{d['title']}\n🔗 連結：{d['hyperlink']}\n\n"
-        info = result if result else "目前資料庫中沒有符合的資料。"
+                count += 1
+        
+        info = result if count > 0 else f"目前資料庫中沒有【{genre}】分類的資料。"
 
-    # 動作 2: 觸發爬蟲
+    # 動作 2: 觸發小說爬蟲
     elif action == "StartSpider":
         info = run_spider()
-
-    # 動作 3: Gemini AI 聊天
-    elif action == "input.unknown":
-        ai_config = types.GenerateContentConfig(system_instruction="你是一個熱心的小說專業助理。")
-        try:
-            response = client.models.generate_content(
-                model='gemini-3.5-flash', # 已修正模型名稱建議
-                contents=req["queryResult"]["queryText"],
-                config=ai_config,
-            )
-            info = response.text.replace("\n", " ")
-        except Exception as e:
-            info = f"AI 服務發生錯誤: {e}"
 
     return make_response(jsonify({"fulfillmentText": info}))
 
 if __name__ == "__main__":
     app.run(debug=True)
 
-
 @app.route('/ask', methods=['GET', 'POST']) 
-def ask():
+de user_prompt:
+            retuf ask():
     if request.method == "POST":
         user_prompt = request.form.get('prompt', '')
-        if not user_prompt:
-            return "請輸入內容", 400
+        if notrn "請輸入內容", 400
         try:
             response = client.models.generate_content(
                 model='gemini-3.5-flash',
