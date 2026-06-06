@@ -78,7 +78,7 @@ def run_spider():
     except Exception as e:
         return f"小說爬蟲發生錯誤: {e}"
 
-# --- 3. 電影爬蟲功能 (獨立 Route: /spriderm) ---
+# --- 3. 電影爬蟲功能 (獨立 Route: /spriderm2) ---
 @app.route("/spriderm2")
 def spiderm2():
     db = firestore.client()
@@ -142,8 +142,10 @@ def webhook2():
 
     return make_response(jsonify({"fulfillmentText": info}))
 
+# 這裡修正了縮排：必須與 @app.route 同一級，而不是在 webhook2 函式內
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 @app.route('/ask', methods=['GET', 'POST']) 
 de user_prompt:
