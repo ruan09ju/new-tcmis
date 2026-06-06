@@ -49,96 +49,94 @@ def index():
     return link
 
 
+from flask import Flask, request, make_response, jsonify
+import firebase_admin
+from firebase_admin import credentials, firestore
+import requests
+from bs4 import BeautifulSoup
+import os
+import json
+
+# --- 1. 初始化 Firebase (確保只執行一次) ---
+if not firebase_admin._apps:
+    firebase_config = os.getenv('FIREBASE_CONFIG')
+    if firebase_config:
+        cred = credentials.Certificate(json.loads(firebase_config))
+        firebase_admin.initialize_app(cred)
+
+app = Flask(__name__)
+
+# --- 2. 爬蟲函式 (負責寫入資料庫) ---
 def run_spider():
     db = firestore.client()
     url = "https://www.xjjxs.com/"
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
         res = requests.get(url, headers=headers, verify=False, timeout=10)
-        res.encoding = 'gbk'  # 若爬下來文字亂碼，可改為 'utf-8'
+        res.encoding = 'gbk'
         soup = BeautifulSoup(res.text, "html.parser")
         items = soup.find_all("div", class_="item")
         
         count = 0
         for item in items:
             a_tag = item.find("a", href=True)
-            if a_tag:
+            span_tag = item.find("span")
+            # 假設這網站結構有作者標籤，若無則預設未知
+            author_tag = item.find("dd", class_="author") 
+            
+            if a_tag and span_tag:
                 title = a_tag.get("title", "無標題")
                 link = a_tag.get("href")
-                # 寫入 Firebase 資料庫
-                db.collection("小說含分類").document(title).set({
+                status = span_tag.text.strip()
+                author = author_tag.text.strip() if author_tag else "佚名"
+                
+                # 寫入 Firebase 資料庫 (以書名為文件 ID)
+                db.collection("小說資料庫").document(title).set({
                     "title": title,
-                    "hyperlink": link,
-                    "genre": "爬蟲更新"
+                    "author": author,
+                    "status": status,
+                    "genre": "奇幻",  # 這裡若爬蟲能抓到分類，請修改這裡
+                    "hyperlink": link
                 })
                 count += 1
         return f"小說爬蟲執行完畢，共更新 {count} 筆資料"
     except Exception as e:
-        return f"小說爬蟲發生錯誤: {e}"
+        return f"爬蟲發生錯誤: {e}"
 
-# --- 3. 電影爬蟲功能 (獨立 Route: /spriderm2) ---
-@app.route("/spriderm2")
-def spiderm2():
-    db = firestore.client()
-    url = "http://www.atmovies.com.tw/movie/next/"
-    Data = requests.get(url)
-    Data.encoding = "utf-8"
-    sp = BeautifulSoup(Data.text, "html.parser")
-    
-    lastUpdate_tag = sp.find(class_="smaller09")
-    lastUpdate = lastUpdate_tag.text.replace("更新時間：","") if lastUpdate_tag else "未知"
-    
-    result = sp.select(".filmListAllX li")
-    total = 0
-    for item in result:
-        try:
-            total += 1
-            movie_id = item.find("a").get("href").replace("/movie", "").replace("/", "")
-            title = item.find(class_="filmtitle").text
-            picture = "https://www.atmovies.com.tw" + item.find("img").get("src")
-            hyperlink = "https://www.atmovies.com.tw" + item.find("a").get("href")
-            showDate = item.find(class_="runtime").text[5:15]
-
-            doc = {
-                "title": title,
-                "picture": picture,
-                "hyperlink": hyperlink,
-                "showDate": showDate,
-                "lastUpdate": lastUpdate
-            }
-            db.collection("小說2B").document(movie_id).set(doc)
-        except:
-            continue
-    return f"小說爬蟲完畢，最近更新日期:{lastUpdate}<br>總共爬取 {total} 部小說到資料庫"
-
-# --- 4. Webhook 主程式 ---
-@app.route("/webhook2", methods=["POST"])
-def webhook2():
+# --- 3. Webhook 主程式 (負責回應 Dialogflow) ---
+@app.route("/webhook", methods=["POST"])
+def webhook():
     req = request.get_json(force=True)
     action = req.get("queryResult", {}).get("action", "")
-    info = "抱歉，小說系統無法辨識您的指令。"
+    parameters = req.get("queryResult", {}).get("parameters", {})
+    
+    info = "抱歉，系統無法辨識您的指令。"
 
-    # 動作 1: 小說分類查詢
+    # 動作 1: 查詢小說
     if action == "genreChoice":
-        genre = req["queryResult"]["parameters"].get("genre", "")
+        status = parameters.get("status", "") # 對應 Dialogflow 的狀態參數
         db = firestore.client()
-        docs = db.collection("小說含分類").get()
-        result = f"您選擇的小說分類是：{genre}\n\n"
         
+        # 進行篩選查詢
+        docs = db.collection("小說資料庫").where("status", "==", status).get()
+        
+        result = f"以下是狀態為【{status}】的小說：\n\n"
         count = 0
         for doc in docs:
             d = doc.to_dict()
-            if genre in d.get("genre", ""):
-                result += f"📖 書名：{d['title']}\n🔗 連結：{d['hyperlink']}\n\n"
-                count += 1
-        
-        info = result if count > 0 else f"目前資料庫中沒有【{genre}】分類的資料。"
+            result += f"📖 書名：{d['title']}\n✍️ 作者：{d['author']}\n🔗 {d['hyperlink']}\n\n"
+            count += 1
+            
+        info = result if count > 0 else f"目前沒有【{status}】的小說資料。"
 
-    # 動作 2: 觸發小說爬蟲
+    # 動作 2: 手動觸發爬蟲
     elif action == "StartSpider":
         info = run_spider()
 
     return make_response(jsonify({"fulfillmentText": info}))
+
+if __name__ == "__main__":
+    app.run(debug=True)
 
 
 @app.route('/ask', methods=['GET', 'POST']) 
