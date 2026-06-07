@@ -49,6 +49,117 @@ def index():
     return link
 
 
+from flask import Flask, request, make_response, jsonify
+import firebase_admin
+from firebase_admin import credentials, firestore
+import requests
+from bs4 import BeautifulSoup
+import os
+import json
+
+# --- 1. 初始化 Firebase (確保在 Vercel 部署時只執行一次) ---
+if not firebase_admin._apps:
+    firebase_config = os.getenv('FIREBASE_CONFIG')
+    if firebase_config:
+        cred = credentials.Certificate(json.loads(firebase_config))
+        firebase_admin.initialize_app(cred)
+
+app = Flask(__name__)
+
+# --- 2. 小說爬蟲函式 (完全對齊學長姐圖一風格，支援網址觸發與動態分類) ---
+@app.route("/crawl")
+def run_spider():
+    db = firestore.client()
+    url = "https://www.xjjxs.com/"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        res = requests.get(url, headers=headers, verify=False, timeout=10)
+        res.encoding = 'gbk'
+        soup = BeautifulSoup(res.text, "html.parser")
+        items = soup.find_all("div", class_="item")
+        
+        count = 0
+        for item in items:
+            a_tag = item.find("a", href=True)
+            span_tag = item.find("span")
+            author_tag = item.find("dd", class_="author") 
+            
+            # 動態尋找網頁中的分類標籤 (優先找 class 為 genre 的標籤，或區塊內的第一個連結)
+            genre_tag = item.find("dd", class_="genre") or item.find("a")
+            
+            if a_tag and span_tag:
+                title = a_tag.get("title", "無標題")
+                link = a_tag.get("href")
+                status = span_tag.text.strip()              # 狀態：已完結 / 連載中
+                author = author_tag.text.strip() if author_tag else "佚名"
+                genre = genre_tag.text.strip() if genre_tag else "綜合小說"  # 動態分類
+                
+                # ====== 這裡完全採用學長姐圖一的資料庫輸入寫法 ======
+                # 1. 整理成 doc 字典
+                doc = {
+                    "title": title,
+                    "author": author,
+                    "status": status,
+                    "genre": genre,
+                    "hyperlink": link
+                }
+                
+                # 2. 自動產生亂碼 ID
+                doc_ref = db.collection("小說資料庫").document()
+                
+                # 3. 寫入 Firebase 資料庫
+                doc_ref.set(doc)
+                # ==================================================
+                
+                count += 1
+                
+        return f"小說爬蟲及存檔完畢，共新增 {count} 筆資料到 Firebase 小說資料庫！"
+    except Exception as e:
+        return f"爬蟲發生錯誤: {e}"
+
+# --- 3. Webhook 主程式 (接收 Dialogflow 指令並進行篩選回應) ---
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    req = request.get_json(force=True)
+    action = req.get("queryResult", {}).get("action", "")
+    parameters = req.get("queryResult", {}).get("parameters", {})
+    
+    info = "抱歉，系統無法辨識您的指令。"
+
+    # 動作 1: 點選選單查詢小說 (支援分類與狀態篩選)
+    if action == "genreChoice":
+        status = parameters.get("status", "")  # 從 Dialogflow 傳過來的狀態 (例如：已完結)
+        genre = parameters.get("genre", "")    # 從 Dialogflow 傳過來的分類 (例如：武俠)
+        
+        db = firestore.client()
+        
+        # 從 Firebase 中精準撈出符合狀態的小說
+        docs = db.collection("小說資料庫").where("status", "==", status).get()
+        
+        # 串接回應文字
+        result = f"我是我們小組開發的小說推薦機器人，您選擇的小說狀態是【{status}】：\n\n"
+        count = 0
+        for doc in docs:
+            d = doc.to_dict()
+            
+            # 如果 Dialogflow 有傳分類過來，就順便篩選分類；若無，就直接顯示該狀態的小說
+            if genre == "" or genre in d.get("genre", ""):
+                result += f"📖 書名：{d['title']}\n✍️ 作者：{d['author']}\n🏷️ 分類：{d['genre']}\n🔗 連結：{d['hyperlink']}\n\n"
+                count += 1
+            
+        info = result if count > 0 else f"目前資料庫中沒有符合【{status}】的資料。"
+
+    # 動作 2: 如果你在 Dialogflow 也有設定按鈕觸發爬蟲
+    elif action == "StartSpider":
+        info = run_spider()
+
+    return make_response(jsonify({"fulfillmentText": info}))
+
+if __name__ == "__main__":
+    app.run(debug=True)
+
+
+
 @app.route('/ask', methods=['GET', 'POST']) 
 def ask():
     if request.method == "POST":
