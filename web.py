@@ -118,8 +118,8 @@ def run_spider():
         return f"爬蟲發生錯誤: {e}"
 
 # --- 3. Webhook 主程式 (接收 Dialogflow 指令並進行篩選回應) ---
-@app.route("/webhook", methods=["POST"])
-def webhook():
+@app.route("/webhook2", methods=["POST"])
+def webhook2():
     req = request.get_json(force=True)
     action = req.get("queryResult", {}).get("action", "")
     parameters = req.get("queryResult", {}).get("parameters", {})
